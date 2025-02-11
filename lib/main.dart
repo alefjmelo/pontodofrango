@@ -2,11 +2,56 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:pontodofrango/screens/navigation_screen.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:pontodofrango/utils/backup_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:workmanager/workmanager.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  Workmanager().initialize(callbackDispatcher, isInDebugMode: false);
   await initializeDateFormatting('pt_BR', null);
   runApp(MyApp());
+}
+
+void callbackDispatcher() {
+  Workmanager().executeTask((task, inputData) async {
+    if (task == 'autoBackupTask') {
+      final prefs = await SharedPreferences.getInstance();
+      final frequency = prefs.getString('backupFrequency') ?? 'none';
+      if (frequency == 'none') return true;
+
+      final lastBackup = prefs.getInt('lastBackupTimestamp') ?? 0;
+      final lastBackupDate = DateTime.fromMillisecondsSinceEpoch(lastBackup);
+      final now = DateTime.now();
+
+      bool shouldBackup = false;
+      switch (frequency) {
+        case 'daily':
+          shouldBackup = now.difference(lastBackupDate).inDays >= 1;
+          break;
+        case 'weekly':
+          shouldBackup = now.difference(lastBackupDate).inDays >= 7;
+          break;
+        case 'monthly':
+          shouldBackup = now.difference(lastBackupDate).inDays >= 30;
+          break;
+        default:
+          shouldBackup = false;
+      }
+
+      if (shouldBackup) {
+        try {
+          await BackupService().exportBackup(forceSignIn: false);
+          await prefs.setInt('lastBackupTimestamp', now.millisecondsSinceEpoch);
+          return true;
+        } catch (e) {
+          return false;
+        }
+      }
+    }
+    return true;
+  });
 }
 
 class MyApp extends StatefulWidget {
@@ -25,6 +70,14 @@ class _MyAppState extends State<MyApp> {
         primarySwatch: Colors.grey,
       ),
       home: WelcomeScreen(),
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('pt', 'BR'),
+      ],
     );
   }
 }

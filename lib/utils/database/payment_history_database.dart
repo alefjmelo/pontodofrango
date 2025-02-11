@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:intl/intl.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
+import 'package:logger/logger.dart';
 
 class PaymentHistoryDatabase {
   static final PaymentHistoryDatabase instance =
@@ -38,6 +39,17 @@ class PaymentHistoryDatabase {
         FOREIGN KEY(clientCode) REFERENCES clients(code)
       )
     ''');
+  }
+
+  Future<void> close() async {
+    try {
+      if (_database != null && _database!.isOpen) {
+        await _database!.close();
+      }
+      _database = null;
+    } catch (e) {
+      Logger().e("Erro ao fechar banco de dados: $e");
+    }
   }
 
   Future<int> insertPaymentHistory(Map<String, dynamic> payment) async {

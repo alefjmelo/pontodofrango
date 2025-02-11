@@ -7,8 +7,10 @@ import '../../models/client_model.dart';
 
 class ClientManagerDialogs extends StatefulWidget {
   final VoidCallback onClientChanged;
+  final Client? client; // added optional client parameter
 
-  const ClientManagerDialogs({super.key, required this.onClientChanged});
+  const ClientManagerDialogs(
+      {super.key, required this.onClientChanged, this.client});
 
   @override
   ClientManagerDialogsState createState() => ClientManagerDialogsState();
@@ -21,11 +23,53 @@ class ClientManagerDialogsState extends State<ClientManagerDialogs> {
   int _selectedClientCode = 0;
   List<Client> _filteredClients = [];
 
+  String formatName(String text) {
+    if (text.isEmpty) return text;
+    final List<String> exceptions = ['de', 'da', 'do'];
+    final List<String> words = text.toLowerCase().split(' ');
+
+    for (var i = 0; i < words.length; i++) {
+      if (words[i].isNotEmpty && !exceptions.contains(words[i])) {
+        words[i] = words[i][0].toUpperCase() + words[i].substring(1);
+      }
+    }
+    return words.join(' ');
+  }
+
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _nameController = TextEditingController();
   final MaskedTextController _phoneController =
       MaskedTextController(mask: '(00) 00000-0000');
   final TextEditingController _addressController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+
+    _nameController.addListener(() {
+      final text = _nameController.text;
+      final formattedText = formatName(text);
+
+      if (text != formattedText) {
+        _nameController.value = TextEditingValue(
+          text: formattedText,
+          selection: TextSelection.collapsed(offset: formattedText.length),
+        );
+      }
+    });
+    // If a client is provided, schedule the edit mode.
+    if (widget.client != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _prepareEditDialog(widget.client!);
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
 
   bool _noPhone = false;
   bool _noAddress = false;
@@ -332,9 +376,14 @@ class ClientManagerDialogsState extends State<ClientManagerDialogs> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           TextField(
+            cursorColor: Colors.white,
             controller: TextEditingController(text: 'Sem número de telefone'),
             enabled: false,
             decoration: InputDecoration(
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: BorderSide(color: Colors.white),
+              ),
               hintText: hint,
               filled: true,
               fillColor: Colors.grey[300],
@@ -351,11 +400,16 @@ class ClientManagerDialogsState extends State<ClientManagerDialogs> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         TextField(
+          cursorColor: Colors.black,
           controller: controller,
           enabled: !isDisabled,
           inputFormatters: [LengthLimitingTextInputFormatter(textSizeLimit)],
           keyboardType: keyboardType,
           decoration: InputDecoration(
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: Colors.grey[600]!),
+            ),
             hintText: hint,
             filled: true,
             fillColor: isDisabled ? Colors.grey[300] : Colors.white,
@@ -374,9 +428,15 @@ class ClientManagerDialogsState extends State<ClientManagerDialogs> {
 
   Widget _buildSearchField() {
     return TextField(
+      cursorColor: Colors.white,
       controller: _searchController,
       onChanged: (value) => setState(() => _searchText = value),
+      style: TextStyle(color: Colors.white),
       decoration: InputDecoration(
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: Colors.white),
+        ),
         hintText: 'Buscar Cliente...',
         hintStyle: TextStyle(color: Colors.white.withOpacity(0.6)),
         filled: true,

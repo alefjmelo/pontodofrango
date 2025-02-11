@@ -13,11 +13,26 @@ class ClientsScreen extends StatefulWidget {
 
 class _ClientScreenState extends State<ClientsScreen> {
   late Future<List<Client>> _clientsFuture;
-  late bool isDialogOpen = false;
+  late bool isEditDialogOpen = false;
+  late bool isClientDialogOpen = false;
+  final TextEditingController _searchController = TextEditingController();
+  String _searchText = '';
+
   @override
   void initState() {
     super.initState();
     _clientsFuture = _loadClients();
+    _searchController.addListener(() {
+      setState(() {
+        _searchText = _searchController.text;
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   Future<List<Client>> _loadClients() async {
@@ -53,12 +68,18 @@ class _ClientScreenState extends State<ClientsScreen> {
                         fontSize: 26)),
               )),
           backgroundColor: Colors.grey[800],
-          body: Column(
-            children: [
-              Expanded(child: _buildClientListView()),
-            ],
+          body: Padding(
+            padding: const EdgeInsets.only(bottom: 25),
+            child: Column(
+              children: [
+                Expanded(
+                  child: _buildClientListView(),
+                ),
+              ],
+            ),
           ),
-          floatingActionButton: isDialogOpen ? null : _buildFloatingButton(),
+          floatingActionButton:
+              isEditDialogOpen ? null : _buildFloatingButton(),
           floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
         ),
       ),
@@ -69,16 +90,16 @@ class _ClientScreenState extends State<ClientsScreen> {
     return FloatingActionButton(
       onPressed: () {
         setState(() {
-          isDialogOpen = true;
+          isEditDialogOpen = true;
         });
         showDialog(
           context: context,
-          builder: (BuildContext context) {
+          builder: (context) {
             return ClientManagerDialogs(onClientChanged: _refreshClientList);
           },
         ).then((_) {
           setState(() {
-            isDialogOpen = false;
+            isEditDialogOpen = false;
           });
         });
       },
@@ -86,6 +107,47 @@ class _ClientScreenState extends State<ClientsScreen> {
       child: Icon(
         Icons.add,
         color: Colors.white,
+      ),
+    );
+  }
+
+  Widget _buildSearchField() {
+    return TextField(
+      cursorColor: Colors.white,
+      controller: _searchController,
+      onChanged: (value) => setState(() => _searchText = value),
+      style: TextStyle(color: Colors.white),
+      decoration: InputDecoration(
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide(color: Colors.white),
+        ),
+        hintText: 'Buscar Cliente...',
+        hintStyle: TextStyle(color: Colors.white.withOpacity(0.6)),
+        filled: true,
+        fillColor: Colors.grey[700],
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(10),
+          borderSide: BorderSide.none,
+        ),
+        suffixIcon: _buildSearchButton(),
+      ),
+    );
+  }
+
+  Widget _buildSearchButton() {
+    return Padding(
+      padding: const EdgeInsets.all(2.5),
+      child: IconButton(
+        style: ButtonStyle(
+          shape: WidgetStatePropertyAll(
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+          iconColor: WidgetStateProperty.all(Colors.white),
+          backgroundColor: WidgetStateProperty.all(Colors.grey[800]),
+        ),
+        icon: Icon(Icons.search),
+        onPressed: () {},
       ),
     );
   }
@@ -102,14 +164,39 @@ class _ClientScreenState extends State<ClientsScreen> {
           ));
         } else if (snapshot.hasError) {
           return Center(child: Text('Error: ${snapshot.error}'));
-        } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+        } else if (!snapshot.hasData) {
           return const Center(
               child: Text(
             'Nenhum cliente encontrado.',
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
           ));
         } else {
-          return _buildClientList(snapshot.data!);
+          List<Client> clients = snapshot.data!;
+          if (_searchText.isNotEmpty) {
+            clients = clients
+                .where((client) => client.nome
+                    .toLowerCase()
+                    .contains(_searchText.toLowerCase()))
+                .toList();
+          }
+          return Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: _buildSearchField(),
+              ),
+              Expanded(
+                child: clients.isEmpty
+                    ? Center(
+                        child: Text('Nenhum cliente encontrado.',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold)),
+                      )
+                    : _buildClientList(clients),
+              )
+            ],
+          );
         }
       },
     );
@@ -174,6 +261,81 @@ class _ClientScreenState extends State<ClientsScreen> {
             MaterialPageRoute(
                 builder: (context) => ClientDetailsScreen(client: client)));
       },
+      onLongPress: () {
+        setState(() {
+          isClientDialogOpen = true;
+        });
+        showDialog(
+            context: context,
+            builder: (context) {
+              return clientOptionsDialog(client); // pass client parameter
+            }).then((_) {
+          setState(() {
+            isClientDialogOpen = false;
+          });
+        });
+      },
+    );
+  }
+
+  Widget clientOptionsDialog(Client client) {
+    return Dialog(
+      backgroundColor: Colors.grey[800]!.withOpacity(0.88),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(25),
+        side: BorderSide(color: Colors.grey[700]!, width: 1),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 30),
+        child: SizedBox(
+          width: double.maxFinite,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ElevatedButton(
+                onPressed: () async {
+                  await removeClient(client.code);
+                  if (mounted) Navigator.pop(context);
+                  _refreshClientList();
+                },
+                style: ElevatedButton.styleFrom(
+                  fixedSize: Size(250, 50),
+                  backgroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                child: Text('Remover',
+                    style: TextStyle(color: Colors.black, fontSize: 18)),
+              ),
+              SizedBox(height: 10),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  showDialog(
+                    context: context,
+                    builder: (context) {
+                      return ClientManagerDialogs(
+                        client: client,
+                        onClientChanged: _refreshClientList,
+                      );
+                    },
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  fixedSize: Size(250, 50),
+                  backgroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                child: Text('Editar',
+                    style: TextStyle(color: Colors.black, fontSize: 18)),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

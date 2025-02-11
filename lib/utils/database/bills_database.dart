@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:intl/intl.dart';
+import 'package:logger/logger.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import '../../models/clientbill_model.dart';
@@ -48,6 +49,17 @@ class BillDatabaseHelper {
     ''');
   }
 
+  Future<void> close() async {
+    try {
+      if (_database != null && _database!.isOpen) {
+        await _database!.close();
+      }
+      _database = null;
+    } catch (e) {
+      Logger().e("Erro ao fechar banco de dados: $e");
+    }
+  }
+
   Future<int> insertBill(Bill bill) async {
     Database db = await database;
     return await db.insert('bills', bill.toMap());
@@ -55,11 +67,37 @@ class BillDatabaseHelper {
 
   Future<List<Bill>> getBillsForClient(int clientCode) async {
     Database db = await database;
-    final List<Map<String, dynamic>> maps = await db.query(
-      'bills',
-      where: 'clientCode = ?',
-      whereArgs: [clientCode],
-    );
+    final List<Map<String, dynamic>> maps = await db.rawQuery('''
+      SELECT * FROM bills 
+      WHERE clientCode = ? 
+      ORDER BY substr(date, 7, 4) || substr(date, 4, 2) || substr(date, 1, 2) DESC
+    ''', [clientCode]);
+    return List.generate(maps.length, (i) {
+      return Bill.fromMap(maps[i]);
+    });
+  }
+
+  Future<List<Bill>> getBillsForClientByDateRange(
+      int clientCode, String startDate, String endDate) async {
+    Database db = await database;
+    final List<Map<String, dynamic>> maps = await db.rawQuery('''
+      SELECT * FROM bills 
+      WHERE clientCode = ? 
+      AND substr(date, 7, 4) || substr(date, 4, 2) || substr(date, 1, 2) 
+      BETWEEN 
+      substr(?, 7, 4) || substr(?, 4, 2) || substr(?, 1, 2)
+      AND
+      substr(?, 7, 4) || substr(?, 4, 2) || substr(?, 1, 2)
+      ORDER BY substr(date, 7, 4) || substr(date, 4, 2) || substr(date, 1, 2) DESC
+    ''', [
+      clientCode,
+      startDate,
+      startDate,
+      startDate,
+      endDate,
+      endDate,
+      endDate
+    ]);
     return List.generate(maps.length, (i) {
       return Bill.fromMap(maps[i]);
     });
@@ -191,5 +229,19 @@ class BillDatabaseHelper {
     }
 
     return monthlyTotals;
+  }
+
+  Future<List<Bill>> getBillsByClientCode(int clientCode) async {
+    Database db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'bills',
+      where: 'clientCode = ?',
+      whereArgs: [clientCode],
+      orderBy: 'date DESC',
+    );
+
+    return List.generate(maps.length, (i) {
+      return Bill.fromMap(maps[i]);
+    });
   }
 }

@@ -20,6 +20,10 @@ class _ChartsScreenState extends State<ChartsScreen> {
   List<BarChartGroupData> _barChartData = [];
   String _errorMessage = '';
 
+  // NEW: State for dynamic y-axis viewport
+  double _currentMinY = 0.0;
+  double _currentMaxY = 500.0;
+
   @override
   void initState() {
     super.initState();
@@ -48,6 +52,17 @@ class _ChartsScreenState extends State<ChartsScreen> {
     setState(() {
       _barChartData = _generateBarChartData(data);
       _totalAmount = data.values.fold(0.0, (sum, item) => sum + item);
+      double computedMax = _getDynamicMaxY();
+      if (_selectedPeriod == 'Ano') {
+        _currentMaxY = computedMax < 7000 ? 7000 : computedMax;
+        _currentMinY = 100;
+      } else if (_selectedPeriod == 'Mês') {
+        _currentMaxY = computedMax < 1000 ? 1000 : computedMax;
+        _currentMinY = 100;
+      } else {
+        _currentMaxY = computedMax < 500 ? 500 : computedMax;
+        _currentMinY = 0;
+      }
     });
   }
 
@@ -65,6 +80,17 @@ class _ChartsScreenState extends State<ChartsScreen> {
     setState(() {
       _barChartData = _generateBarChartData(data);
       _totalAmount = data.values.fold(0.0, (sum, item) => sum + item);
+      double computedMax = _getDynamicMaxY();
+      if (_selectedPeriod == 'Ano') {
+        _currentMaxY = computedMax < 7000 ? 7000 : computedMax;
+        _currentMinY = 100;
+      } else if (_selectedPeriod == 'Mês') {
+        _currentMaxY = computedMax < 1000 ? 1000 : computedMax;
+        _currentMinY = 100;
+      } else {
+        _currentMaxY = computedMax < 500 ? 500 : computedMax;
+        _currentMinY = 0;
+      }
     });
   }
 
@@ -127,6 +153,17 @@ class _ChartsScreenState extends State<ChartsScreen> {
       index++;
     });
     return barGroups;
+  }
+
+  // NEW: Calculate dynamic max from _barChartData
+  double _getDynamicMaxY() {
+    double dataMax = 0.0;
+    for (var group in _barChartData) {
+      for (var rod in group.barRods) {
+        if (rod.toY > dataMax) dataMax = rod.toY;
+      }
+    }
+    return dataMax;
   }
 
   @override
@@ -313,80 +350,96 @@ class _ChartsScreenState extends State<ChartsScreen> {
                   _errorMessage,
                   style: TextStyle(color: Colors.red, fontSize: 16),
                 ),
+              // NEW: Wrap chart with GestureDetector for infinite vertical scroll (limited downward)
               Flexible(
-                child: BarChart(
-                  BarChartData(
-                    maxY: _selectedPeriod == 'Ano'
-                        ? 7000
+                child: GestureDetector(
+                  onVerticalDragUpdate: (details) {
+                    // UPDATED: Set factor to 2.0 for month, 4.0 for year, and 1.0 otherwise
+                    double factor = _selectedPeriod == 'Ano'
+                        ? 4.0
                         : _selectedPeriod == 'Mês'
-                            ? 1000
-                            : 500,
-                    minY: _selectedPeriod == 'Ano'
-                        ? 100
-                        : _selectedPeriod == 'Mês'
-                            ? 100
-                            : 0,
-                    gridData: FlGridData(
-                      show: true,
-                      getDrawingHorizontalLine: (value) {
-                        return FlLine(
-                          color: Colors.white.withOpacity(0.1),
-                          strokeWidth: 1,
-                        );
-                      },
-                      getDrawingVerticalLine: (value) {
-                        return FlLine(
-                          color: Colors.white.withOpacity(0.1),
-                          strokeWidth: 1,
-                        );
-                      },
-                    ),
-                    titlesData: FlTitlesData(
-                      leftTitles: AxisTitles(
-                        sideTitles: SideTitles(
-                          showTitles: true,
-                          reservedSize: _selectedPeriod == 'Ano'
-                              ? 70
-                              : _selectedPeriod == 'Mês'
-                                  ? 70
-                                  : 50,
-                          getTitlesWidget: (value, meta) {
-                            return Text(
-                              'R\$ ${value.toInt()}',
-                              style:
-                                  TextStyle(color: Colors.white, fontSize: 12),
-                            );
-                          },
+                            ? 2.0
+                            : 1.0;
+                    double shift = details.delta.dy * factor;
+                    double baseMin = _selectedPeriod == 'Semana' ? 0 : 100;
+                    double range = _currentMaxY - _currentMinY;
+                    double newMin = _currentMinY + shift;
+                    double newMax = _currentMaxY + shift;
+                    if (newMin < baseMin) {
+                      newMin = baseMin;
+                      newMax = baseMin + range;
+                    }
+                    setState(() {
+                      _currentMinY = newMin;
+                      _currentMaxY = newMax;
+                    });
+                  },
+                  child: BarChart(
+                    BarChartData(
+                      maxY: _currentMaxY,
+                      minY: _currentMinY,
+                      gridData: FlGridData(
+                        show: true,
+                        getDrawingHorizontalLine: (value) {
+                          return FlLine(
+                            color: Colors.white.withOpacity(0.1),
+                            strokeWidth: 1,
+                          );
+                        },
+                        getDrawingVerticalLine: (value) {
+                          return FlLine(
+                            color: Colors.white.withOpacity(0.1),
+                            strokeWidth: 1,
+                          );
+                        },
+                      ),
+                      titlesData: FlTitlesData(
+                        leftTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            reservedSize: _selectedPeriod == 'Ano'
+                                ? 70
+                                : _selectedPeriod == 'Mês'
+                                    ? 70
+                                    : 70,
+                            getTitlesWidget: (value, meta) {
+                              // NEW: Only show round numbers (multiples of 100)
+                              if (value.round() % 100 != 0) return Container();
+                              return Text('R\$ ${value.round()}',
+                                  style: TextStyle(
+                                      color: Colors.white, fontSize: 12));
+                            },
+                          ),
+                        ),
+                        bottomTitles: AxisTitles(
+                          sideTitles: SideTitles(
+                            showTitles: true,
+                            reservedSize: 40,
+                            getTitlesWidget: (value, meta) {
+                              return _getBottomTitles(value);
+                            },
+                          ),
+                        ),
+                        topTitles: AxisTitles(
+                          sideTitles: SideTitles(showTitles: false),
+                        ),
+                        rightTitles: AxisTitles(
+                          sideTitles: SideTitles(showTitles: false),
                         ),
                       ),
-                      bottomTitles: AxisTitles(
-                        sideTitles: SideTitles(
-                          showTitles: true,
-                          reservedSize: 40,
-                          getTitlesWidget: (value, meta) {
-                            return _getBottomTitles(value);
-                          },
+                      borderData: FlBorderData(
+                        show: true,
+                        border: Border(
+                          left: BorderSide(
+                              color: Colors.white.withOpacity(0.2), width: 1),
+                          bottom: BorderSide(
+                              color: Colors.white.withOpacity(0.2), width: 1),
+                          top: BorderSide.none,
+                          right: BorderSide.none,
                         ),
                       ),
-                      topTitles: AxisTitles(
-                        sideTitles: SideTitles(showTitles: false),
-                      ),
-                      rightTitles: AxisTitles(
-                        sideTitles: SideTitles(showTitles: false),
-                      ),
+                      barGroups: _barChartData,
                     ),
-                    borderData: FlBorderData(
-                      show: true,
-                      border: Border(
-                        left: BorderSide(
-                            color: Colors.white.withOpacity(0.2), width: 1),
-                        bottom: BorderSide(
-                            color: Colors.white.withOpacity(0.2), width: 1),
-                        top: BorderSide.none,
-                        right: BorderSide.none,
-                      ),
-                    ),
-                    barGroups: _barChartData,
                   ),
                 ),
               ),

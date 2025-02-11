@@ -141,7 +141,28 @@ class SalesScreenState extends State<SalesScreen> {
       initialDate: DateTime.now(),
       firstDate: DateTime(2000),
       lastDate: DateTime(2101),
+      locale: const Locale('pt', 'BR'),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: ColorScheme.dark(
+              primary: Colors.yellow, // Header background
+              onPrimary: Colors.black, // Header text
+              surface: Colors.grey[850]!, // Dialog background
+              onSurface: Colors.white, // Calendar text
+            ),
+            dialogBackgroundColor: Colors.grey[900],
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.white, // Button text color
+              ),
+            ),
+          ),
+          child: child!,
+        );
+      },
     );
+
     if (picked != null && picked != DateTime.now()) {
       setState(() {
         _selectedDate = DateFormat('dd/MM/yyyy').format(picked);
@@ -154,6 +175,71 @@ class SalesScreenState extends State<SalesScreen> {
         _valueController.text.replaceAll(RegExp(r'[^0-9.]'), '');
     final doubleValue = double.tryParse(numericValue) ?? 0.0;
     return doubleValue > 0;
+  }
+
+  Widget _showClientSelected() {
+    final bool isClientSelected = _selectedClient != null;
+
+    return Expanded(
+      flex: 6,
+      child: GestureDetector(
+        onTap: _showClientDialog,
+        child: Container(
+          height: 80,
+          decoration: BoxDecoration(
+            color: Colors.grey[700],
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.1),
+              width: 1,
+            ),
+          ),
+          child: Padding(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Cliente:',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold)),
+                      SizedBox(height: 4),
+                      Text(
+                        isClientSelected
+                            ? _selectedClient!
+                            : 'Toque para selecionar',
+                        style: TextStyle(
+                          color: isClientSelected
+                              ? Colors.yellow
+                              : Colors.white.withOpacity(0.5),
+                          fontSize: isClientSelected ? 16 : 14,
+                          fontWeight: isClientSelected
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  Icons.arrow_forward_ios,
+                  color: Colors.white.withOpacity(0.5),
+                  size: 16,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -181,54 +267,24 @@ class SalesScreenState extends State<SalesScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              _showClientSelected(),
-              const SizedBox(height: 20),
-              _buildDateSelector(),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _showClientSelected(),
+                  SizedBox(width: 20),
+                  _buildDateSelector(),
+                ],
+              ),
               const SizedBox(height: 20),
               _buildValueTextField(),
               _buildDescriptionFieldWithLine(),
-              const SizedBox(height: 20),
+              const SizedBox(height: 40),
               _buildNumberKeyboard(),
-              const SizedBox(height: 20),
+              const SizedBox(height: 40),
               _buildPayButton(),
-              SizedBox(height: 20),
-              _buildClientSelector(),
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _showClientSelected() {
-    final bool isClientSelected = _selectedClient != null;
-
-    return Center(
-      child: Text(
-        isClientSelected ? _selectedClient! : 'Nenhum cliente selecionado.',
-        style: TextStyle(
-          color: isClientSelected ? Colors.yellow : Colors.red,
-          fontSize: isClientSelected ? 26 : 18,
-          fontWeight: isClientSelected ? FontWeight.bold : FontWeight.bold,
-        ),
-        textAlign: TextAlign.center,
-      ),
-    );
-  }
-
-  Widget _buildClientSelector() {
-    return ElevatedButton(
-      onPressed: _showClientDialog,
-      style: ElevatedButton.styleFrom(
-        minimumSize: const Size(250, 50),
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
-        ),
-      ),
-      child: Text(
-        'Selecionar Cliente',
-        style: TextStyle(color: Colors.black, fontSize: 18),
       ),
     );
   }
@@ -237,7 +293,7 @@ class SalesScreenState extends State<SalesScreen> {
     showDialog(
       context: context,
       builder: (BuildContext context) {
-        bool showClientsList = false; // Move this outside StatefulBuilder
+        bool showClientsList = false;
 
         return StatefulBuilder(
           builder: (context, setState) {
@@ -267,6 +323,8 @@ class SalesScreenState extends State<SalesScreen> {
                       ),
                       SizedBox(height: 10),
                       TextField(
+                        cursorColor: Colors.white,
+                        style: TextStyle(color: Colors.white),
                         controller: searchController,
                         onChanged: (value) {
                           setState(() {
@@ -274,6 +332,10 @@ class SalesScreenState extends State<SalesScreen> {
                           });
                         },
                         decoration: InputDecoration(
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            borderSide: BorderSide(color: Colors.white),
+                          ),
                           hintText: 'Buscar Cliente...',
                           hintStyle: TextStyle(
                             color: Colors.white.withOpacity(0.6),
@@ -409,14 +471,54 @@ class SalesScreenState extends State<SalesScreen> {
   }
 
   Widget _buildDateSelector() {
-    return GestureDetector(
-      onTap: () => _selectDate(context),
-      child: Text(
-        _selectedDate,
-        style: const TextStyle(
-          fontSize: 22,
-          color: Colors.white,
-          fontWeight: FontWeight.bold,
+    return Expanded(
+      flex: 4, // 40% of the space
+      child: GestureDetector(
+        onTap: () => _selectDate(context),
+        child: Container(
+          height: 80,
+          decoration: BoxDecoration(
+            color: Colors.grey[700],
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.1),
+              width: 1,
+            ),
+          ),
+          child: Padding(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 10.0, vertical: 8.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Data:',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold)),
+                    SizedBox(height: 4),
+                    Text(
+                      _selectedDate,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        color: Colors.yellow,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                Icon(
+                  Icons.arrow_forward_ios,
+                  color: Colors.white.withOpacity(0.5),
+                  size: 16,
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -427,6 +529,7 @@ class SalesScreenState extends State<SalesScreen> {
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         TextField(
+          cursorColor: Colors.white,
           controller: _descriptionController,
           decoration: InputDecoration(
             hintText: 'Descrição da venda',
@@ -455,6 +558,7 @@ class SalesScreenState extends State<SalesScreen> {
         return TextField(
           controller: _valueController,
           textAlign: TextAlign.center,
+          enableInteractiveSelection: false,
           style: const TextStyle(
             fontSize: 48,
             fontWeight: FontWeight.bold,

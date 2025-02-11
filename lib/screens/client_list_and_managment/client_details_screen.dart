@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:pontodofrango/screens/navigation_screen.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../models/client_model.dart';
 import '../../models/clientbill_model.dart';
 import '../../models/paymenthistory_model.dart';
+import '../../utils/database/bills_database.dart';
 import '../../utils/operations/bills_operations.dart';
 import '../../utils/operations/client_operations.dart';
 import '../../utils/operations/payment_history_operations.dart';
+import '../../utils/pdf_helper.dart';
 import 'payment_screen.dart';
 
 class ClientDetailsScreen extends StatefulWidget {
@@ -28,6 +31,24 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
     super.initState();
     currentClient = widget.client;
     _refreshClientData();
+  }
+
+  Future<void> _sharePdf() async {
+    try {
+      final bills =
+          await BillDatabaseHelper().getBillsByClientCode(currentClient.code);
+      final pdfFile = await PdfHelper.generateBillReport(currentClient, bills);
+      await Share.shareXFiles(
+        [XFile(pdfFile.path)],
+        text: 'Extrato do Cliente ${currentClient.nome}',
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao gerar extrato: $e')),
+        );
+      }
+    }
   }
 
   Future<void> _refreshClientData() async {
@@ -128,7 +149,7 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
       style: ElevatedButton.styleFrom(
         minimumSize: const Size(double.infinity, 50),
         foregroundColor: Colors.black,
-        backgroundColor: Colors.yellow,
+        backgroundColor: Colors.white,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(10),
         ),
@@ -146,7 +167,10 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
       context: context,
       builder: (BuildContext context) {
         return Dialog(
-          backgroundColor: Colors.black,
+          backgroundColor: Colors.grey[800],
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(25),
+              side: BorderSide(color: Colors.grey[700]!, width: 1)),
           child: ConstrainedBox(
             constraints: BoxConstraints(
               maxHeight: MediaQuery.of(context).size.height * 0.8,
@@ -190,7 +214,7 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
                               child: Container(
                             constraints: BoxConstraints(minHeight: 70),
                             decoration: BoxDecoration(
-                              color: Colors.grey[800],
+                              color: Colors.grey[700],
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: Center(
@@ -203,7 +227,7 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
                         } else {
                           return Container(
                             decoration: BoxDecoration(
-                              color: Colors.grey[800],
+                              color: Colors.grey[700],
                               borderRadius: BorderRadius.circular(10),
                             ),
                             width: double.maxFinite,
@@ -326,39 +350,43 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
   }
 
   Widget _buildBillItem(Bill bill) {
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 4.0),
-      padding: const EdgeInsets.all(8.0),
-      decoration: BoxDecoration(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(height: 2),
-          Text(bill.date,
-              style:
-                  const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                bill.description.isNotEmpty
-                    ? bill.description
-                    : 'Descrição não informada',
-                style:
-                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-              ),
-              Text(
-                'R\$ ${bill.value.toStringAsFixed(2)}',
-                style:
-                    const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-            ],
+    return AnimatedBillItem(
+      bill: bill,
+      onLongPress: () => _showDeleteConfirmationDialog(bill),
+    );
+  }
+
+  Future<void> _showDeleteConfirmationDialog(Bill bill) async {
+    return showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: Colors.grey[800],
+          title: const Text(
+            'Tem certeza que deseja remover a conta?',
+            style: TextStyle(color: Colors.white, fontSize: 16),
           ),
-        ],
-      ),
+          actions: [
+            TextButton(
+              child:
+                  const Text('Cancelar', style: TextStyle(color: Colors.white)),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            TextButton(
+              child: const Text('Sim', style: TextStyle(color: Colors.white)),
+              onPressed: () async {
+                final navigator = Navigator.of(context);
+                await removeBill(bill.clientCode, bill.description, bill.date);
+                if (!mounted) return;
+                navigator.pop();
+                setState(() {
+                  _refreshClientData();
+                });
+              },
+            ),
+          ],
+        );
+      },
     );
   }
 
@@ -366,7 +394,7 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
     final total = bills.fold<double>(0, (sum, item) => sum + item.value);
     return Container(
       padding: const EdgeInsets.all(8.0),
-      color: Colors.yellow[700],
+      color: Colors.yellow[600]!.withOpacity(0.45),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -436,14 +464,89 @@ class _ClientDetailsScreenState extends State<ClientDetailsScreen> {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(100),
             ),
-            onPressed: () {
-              // Add your "Compartilhar" button logic here
-            },
+            onPressed: _sharePdf,
             backgroundColor: Colors.white,
             child: Icon(Icons.share), // You can customize the color
           ),
         )
       ],
+    );
+  }
+}
+
+class AnimatedBillItem extends StatefulWidget {
+  final Bill bill;
+  final VoidCallback onLongPress;
+
+  const AnimatedBillItem({
+    super.key,
+    required this.bill,
+    required this.onLongPress,
+  });
+
+  @override
+  AnimatedBillItemState createState() => AnimatedBillItemState();
+}
+
+class AnimatedBillItemState extends State<AnimatedBillItem>
+    with SingleTickerProviderStateMixin {
+  double _scale = 1.0;
+
+  void _onLongPressStart(LongPressStartDetails details) {
+    setState(() => _scale = 0.90);
+  }
+
+  void _onLongPressEnd(LongPressEndDetails details) {
+    setState(() => _scale = 1.0);
+    widget.onLongPress();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onLongPressStart: _onLongPressStart,
+      onLongPressEnd: _onLongPressEnd,
+      child: TweenAnimationBuilder(
+        tween: Tween<double>(begin: 1.0, end: _scale),
+        duration: const Duration(milliseconds: 100),
+        builder: (context, double scale, child) {
+          return Transform.scale(scale: scale, child: child);
+        },
+        child: Container(
+          margin: const EdgeInsets.symmetric(vertical: 4.0),
+          padding: const EdgeInsets.all(8.0),
+          decoration: BoxDecoration(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 2),
+              Text(widget.bill.date,
+                  style: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.bold)),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    widget.bill.description.isNotEmpty
+                        ? widget.bill.description
+                        : 'Descrição não informada',
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w500),
+                  ),
+                  Text(
+                    'R\$ ${widget.bill.value.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

@@ -159,6 +159,7 @@ class PaymentScreenState extends State<PaymentScreen> {
       valueListenable: _valueController,
       builder: (context, value, child) {
         return TextField(
+          cursorColor: Colors.white,
           controller: _valueController,
           textAlign: TextAlign.center,
           style: const TextStyle(
@@ -167,6 +168,10 @@ class PaymentScreenState extends State<PaymentScreen> {
             color: Colors.white,
           ),
           decoration: InputDecoration(
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide(color: Colors.white),
+            ),
             hintText: _showHint ? 'R\$ 0,00' : null,
             hintStyle: TextStyle(
               fontSize: 48,

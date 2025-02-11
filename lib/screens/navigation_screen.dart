@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'client_list_and_managment/clients_screen.dart';
 import 'sales_screen.dart';
 import 'charts_screen.dart';
+import 'settings_screen.dart';
 
 class NavigationScreen extends StatefulWidget {
   const NavigationScreen({
@@ -29,6 +30,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
           Icon(Icons.person, size: iconSize),
           Icon(Icons.attach_money_rounded, size: iconSize),
           Icon(Icons.bar_chart, size: iconSize),
+          Icon(Icons.settings, size: iconSize), // Add new settings icon
         ],
         color: Colors.yellow,
         buttonBackgroundColor: Colors.white,
@@ -46,7 +48,9 @@ class _NavigationScreenState extends State<NavigationScreen> {
             ? ClientsScreen()
             : _selectedIndex == 1
                 ? SalesScreen()
-                : ChartsScreen(),
+                : _selectedIndex == 2
+                    ? ChartsScreen()
+                    : SettingsScreen(),
       ),
     );
   }

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:pontodofrango/models/client_model.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
+import 'package:logger/logger.dart';
 
 class ClientDataBase {
   static final ClientDataBase _instance = ClientDataBase._internal();
@@ -36,6 +37,17 @@ class ClientDataBase {
         saldoDevedor REAL DEFAULT 0.0
       )
     ''');
+  }
+
+  Future<void> close() async {
+    try {
+      if (_database != null && _database!.isOpen) {
+        await _database!.close();
+      }
+      _database = null;
+    } catch (e) {
+      Logger().e("Erro ao fechar banco de dados: $e");
+    }
   }
 
   Future<int> insertClient(Client client) async {
